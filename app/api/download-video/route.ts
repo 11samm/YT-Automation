@@ -1,69 +1,41 @@
-import { NextResponse } from 'next/server'
+import { promises as fs } from "fs";
+import path from "path";
+import { NextResponse } from "next/server";
 
-function isAllowedVideoUrl(urlStr: string): boolean {
-  let url: URL
-  try {
-    url = new URL(urlStr)
-  } catch {
-    return false
-  }
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') return false
-  const supabaseBase = process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (supabaseBase) {
-    try {
-      const allowedHost = new URL(supabaseBase).hostname
-      if (url.hostname === allowedHost) return true
-    } catch {
-      /* ignore */
-    }
-  }
-  if (url.hostname.endsWith('.supabase.co') || url.hostname.endsWith('.supabase.in')) {
-    return true
-  }
-  return false
-}
+const OUTPUT_BASE = path.join(process.cwd(), "output");
 
 /**
- * Server-side fetch so the browser can download cross-origin videos without CORS on GET.
+ * GET /api/download-video?path=<absolute-or-relative-path>
+ * Streams a rendered MP4 from the local output/ directory.
+ * Only serves files inside the output/ directory (path traversal guard).
  */
-export async function POST(request: Request) {
-  let body: unknown
-  try {
-    body = await request.json()
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const filePath = searchParams.get("path");
+
+  if (!filePath) {
+    return NextResponse.json({ error: "path parameter is required" }, { status: 400 });
   }
-  const url =
-    typeof body === 'object' &&
-    body !== null &&
-    'url' in body &&
-    typeof (body as { url: unknown }).url === 'string'
-      ? (body as { url: string }).url
-      : ''
-  if (!url || !isAllowedVideoUrl(url)) {
-    return NextResponse.json({ error: 'Invalid or disallowed URL' }, { status: 400 })
+
+  // Resolve and guard against path traversal
+  const resolved = path.resolve(filePath);
+  if (!resolved.startsWith(OUTPUT_BASE)) {
+    return NextResponse.json({ error: "Access denied" }, { status: 403 });
   }
 
   try {
-    const upstream = await fetch(url, { cache: 'no-store' })
-    if (!upstream.ok) {
-      return NextResponse.json(
-        { error: upstream.statusText || 'Upstream fetch failed' },
-        { status: 502 }
-      )
-    }
-    const contentType = upstream.headers.get('content-type') || 'video/mp4'
-    const buf = await upstream.arrayBuffer()
-    return new NextResponse(buf, {
+    const buffer = await fs.readFile(resolved);
+    const filename = path.basename(resolved);
+    return new NextResponse(buffer, {
       status: 200,
       headers: {
-        'Content-Type': contentType,
-        'Content-Disposition': 'attachment; filename="tutor-film-lesson.mp4"',
-        'Cache-Control': 'no-store',
+        "Content-Type": "video/mp4",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Content-Length": buffer.byteLength.toString(),
+        "Cache-Control": "no-store",
       },
-    })
-  } catch (e) {
-    console.error('POST /api/download-video', e)
-    return NextResponse.json({ error: 'Fetch failed' }, { status: 502 })
+    });
+  } catch {
+    return NextResponse.json({ error: "File not found" }, { status: 404 });
   }
 }

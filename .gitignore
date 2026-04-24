@@ -26,3 +26,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Pipeline runtime artifacts
+/jobs/
+/output/
+/tmp/
