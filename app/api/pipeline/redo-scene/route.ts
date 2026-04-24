@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: "jobId and sceneId required" }, { status: 400 });
 
-  const { jobId, sceneId } = parsed.data;
+  const { jobId, sceneId, promptOverride } = parsed.data;
   const filePath = path.join(JOBS_DIR, `${jobId}.json`);
 
   try {
@@ -50,9 +50,9 @@ export async function POST(request: Request) {
     await fs.writeFile(filePath, JSON.stringify(job, null, 2), "utf8");
 
     // Regenerate image (fast: ~3–6s with Fal.ai)
-    let imagePath: string;
+    let imageResult: Awaited<ReturnType<typeof generateImage>>;
     try {
-      imagePath = await generateImage(sceneInstruction, outputDir);
+      imageResult = await generateImage(sceneInstruction, outputDir, promptOverride || undefined);
     } catch (err) {
       sceneJob.status = "failed";
       sceneJob.error = err instanceof Error ? err.message : String(err);
@@ -70,7 +70,8 @@ export async function POST(request: Request) {
       }
     }
 
-    sceneJob.image_path = imagePath;
+    sceneJob.image_path = imageResult.filePath;
+    sceneJob.image_prompt = imageResult.prompt;
     sceneJob.audio_path = audioPath;
     sceneJob.status = "image_done";
     await fs.writeFile(filePath, JSON.stringify(job, null, 2), "utf8");

@@ -3,12 +3,14 @@ import { z } from "zod";
 // ─── Art Style ──────────────────────────────────────────────────────────────
 
 export const DOODLE_STYLE_SUFFIX =
-  "2D flat cartoon animation, every single character has a perfectly round plain white balloon head " +
+  "2D flat cartoon animation, clean educational animation style, " +
+  "every single character has a perfectly round plain white balloon head " +
   "with two small black dot eyes and a simple curved line mouth, simple cartoon body shapes, " +
   "bold black outlines, flat solid color fills, clean vector illustration, " +
-  "webcomic panel art style, Kurzgesagt-inspired character design, " +
-  "simple solid-color backgrounds, no gradients, no textures, no photorealism, " +
-  "no detailed anatomy, no realistic skin or hair rendering";
+  "simple solid-color backgrounds with minimal detail, muted neutral color palette, " +
+  "soft ambient lighting only, no dramatic shadows, no noir lighting, " +
+  "no gradients, no textures, no photorealism, no detailed anatomy, no realistic skin or hair, " +
+  "absolutely no text, no words, no letters, no numbers, no writing of any kind anywhere in the image";
 
 // ─── Camera Instructions ────────────────────────────────────────────────────
 
@@ -99,7 +101,11 @@ export type JobStage =
 export interface SceneJob {
   scene_id: number;
   image_path?: string;
+  /** The Flux prompt used to generate the current image — shown pre-filled in the redo editor */
+  image_prompt?: string;
   audio_path?: string;
+  /** Set when TTS failed and scene fell back to silence — visible in job JSON for debugging */
+  tts_error?: string;
   saliency?: SaliencyResult;
   clip_path?: string;
   /** User decision: undefined = pending review, true = approved, false = needs redo */
@@ -126,6 +132,10 @@ export interface PipelineJob {
   script_approved?: boolean;
   /** Written by approve-all API; orchestrator polls for this */
   all_scenes_approved?: boolean;
+  /** TTS provider chosen at job creation: "elevenlabs" | "kokoro" | "openai" */
+  tts_provider?: string;
+  /** Kokoro voice used when tts_provider === "kokoro": "af_bella" | "am_echo" */
+  kokoro_voice?: string;
 }
 
 // ─── Duration Presets ───────────────────────────────────────────────────────

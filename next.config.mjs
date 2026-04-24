@@ -6,8 +6,8 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  /** Keep native ffmpeg binary on disk; bundling breaks `ffmpeg-static` paths (ENOENT). */
-  serverExternalPackages: ['ffmpeg-static'],
+  /** Keep native/file-path-dependent packages unbundled so __dirname resolves correctly at runtime. */
+  serverExternalPackages: ['ffmpeg-static', 'kokoro-js', '@huggingface/transformers', 'onnxruntime-node'],
 }
 
 export default nextConfig

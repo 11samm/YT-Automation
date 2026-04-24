@@ -163,11 +163,28 @@ export async function run(
           const sceneJob = job.scenes.find((s) => s.scene_id === scene.scene_id)!;
           try {
             console.log(`[Scene ${scene.scene_id}] Image + TTS...`);
-            const [imagePath, audioPath] = await Promise.all([
+
+            // TTS failure is non-fatal — fall back to per-scene silence so the
+            // image review and render pipeline can continue uninterrupted.
+            const ttsPromise = generateTTS(scene.narration_text, scene.scene_id, outputDir)
+              .catch(async (err: Error) => {
+                const msg = err.message;
+                console.warn(`[Scene ${scene.scene_id}] TTS failed (using silence): ${msg}`);
+                sceneJob.tts_error = msg;
+                return generateSceneSilence(scene.duration_seconds, scene.scene_id, outputDir);
+              });
+
+            const [imageResult, audioPath] = await Promise.all([
               generateImage(scene, outputDir),
-              generateTTS(scene.narration_text, scene.scene_id, outputDir),
+              ttsPromise,
             ]);
-            Object.assign(sceneJob, { image_path: imagePath, audio_path: audioPath, status: "image_done" });
+
+            Object.assign(sceneJob, {
+              image_path: imageResult.filePath,
+              image_prompt: imageResult.prompt,
+              audio_path: audioPath,
+              status: "image_done",
+            });
             await saveJob(job);
             console.log(`[Scene ${scene.scene_id}] Image done.`);
           } catch (err) {
@@ -277,6 +294,28 @@ async function generateSilentAudio(durationSeconds: number, outputDir: string): 
     proc.on("close", (code) => {
       if (code === 0) resolve(silentPath);
       else reject(new Error(`Silent audio gen failed (exit ${code})`));
+    });
+    proc.on("error", reject);
+  });
+}
+
+/** Generate a per-scene silent audio file as a TTS fallback. */
+async function generateSceneSilence(durationSeconds: number, sceneId: number, outputDir: string): Promise<string> {
+  const { spawn } = await import("child_process");
+  const { resolveFfmpegBinary } = await import("@/lib/ffmpeg-binary");
+  const silentPath = path.join(outputDir, `scene_${sceneId}_narration_silence.mp3`);
+
+  return new Promise((resolve, reject) => {
+    const ffmpeg = resolveFfmpegBinary();
+    const args = [
+      "-f", "lavfi", "-i", `anullsrc=r=44100:cl=mono:d=${durationSeconds}`,
+      "-c:a", "libmp3lame", "-b:a", "64k",
+      "-y", silentPath,
+    ];
+    const proc = spawn(ffmpeg, args, { stdio: "ignore" });
+    proc.on("close", (code) => {
+      if (code === 0) resolve(silentPath);
+      else reject(new Error(`Scene silence gen failed (exit ${code})`));
     });
     proc.on("error", reject);
   });

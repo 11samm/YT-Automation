@@ -100,18 +100,67 @@ function StageIndicator({ current }: { current: StageName }) {
 
 // ─── Setup Form ───────────────────────────────────────────────────────────────
 
-function SetupForm({ onStart }: { onStart: (topic: string, duration: number) => void }) {
+const TTS_PROVIDERS = [
+  { id: "elevenlabs", label: "ElevenLabs", description: "Cloud — requires API key" },
+  { id: "kokoro",     label: "Kokoro-82M", description: "Local — free, runs on device" },
+] as const;
+
+const KOKORO_VOICES = [
+  { id: "af_bella", label: "Bella", description: "American Female · warm" },
+  { id: "am_echo",  label: "Echo",  description: "American Male · deep" },
+] as const;
+
+type TtsProvider = typeof TTS_PROVIDERS[number]["id"];
+type KokoroVoice = typeof KOKORO_VOICES[number]["id"];
+
+type TestState = "idle" | "testing" | "ok" | "error";
+
+function SetupForm({ onStart }: { onStart: (topic: string, duration: number, ttsProvider: TtsProvider, kokoroVoice: KokoroVoice) => void }) {
   const [topic, setTopic] = useState("");
   const [duration, setDuration] = useState(600);
+  const [ttsProvider, setTtsProvider] = useState<TtsProvider>("elevenlabs");
+  const [kokoroVoice, setKokoroVoice] = useState<KokoroVoice>("af_bella");
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [testState, setTestState] = useState<TestState>("idle");
+  const [testError, setTestError] = useState<string | null>(null);
+
+  function resetTest() {
+    setTestState("idle");
+    setTestError(null);
+  }
+
+  async function handleTtsTest() {
+    setTestState("testing");
+    setTestError(null);
+    try {
+      const res = await fetch("/api/tts/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: ttsProvider, kokoroVoice }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: string }).error ?? `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.play();
+      audio.onended = () => URL.revokeObjectURL(url);
+      setTestState("ok");
+    } catch (err) {
+      setTestError(err instanceof Error ? err.message : "Unknown error");
+      setTestState("error");
+    }
+  }
 
   async function handleStart() {
     if (!topic.trim()) return;
     setError(null);
     setStarting(true);
     try {
-      onStart(topic.trim(), duration);
+      onStart(topic.trim(), duration, ttsProvider, kokoroVoice);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
       setStarting(false);
@@ -161,6 +210,92 @@ function SetupForm({ onStart }: { onStart: (topic: string, duration: number) => 
               </button>
             ))}
           </div>
+        </div>
+
+        {/* TTS Provider */}
+        <div className="space-y-2">
+          <label className="text-sm text-zinc-300 font-medium">Voice Engine</label>
+          <div className="grid grid-cols-2 gap-2">
+            {TTS_PROVIDERS.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => { setTtsProvider(p.id); resetTest(); }}
+                className={cn(
+                  "py-2.5 px-3 rounded-lg border text-left transition-all",
+                  ttsProvider === p.id
+                    ? "border-white bg-white/10 text-white"
+                    : "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-300",
+                )}
+              >
+                <div className="text-sm font-semibold">{p.label}</div>
+                <div className="text-[10px] text-zinc-500 mt-0.5">{p.description}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Kokoro voice picker (only when Kokoro is selected) */}
+        {ttsProvider === "kokoro" && (
+          <div className="space-y-2">
+            <label className="text-sm text-zinc-300 font-medium">Kokoro Voice</label>
+            <div className="grid grid-cols-2 gap-2">
+              {KOKORO_VOICES.map((v) => (
+                <button
+                  key={v.id}
+                  onClick={() => { setKokoroVoice(v.id); resetTest(); }}
+                  className={cn(
+                    "py-2.5 px-3 rounded-lg border text-left transition-all",
+                    kokoroVoice === v.id
+                      ? "border-indigo-400 bg-indigo-500/10 text-white"
+                      : "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-300",
+                  )}
+                >
+                  <div className="text-sm font-semibold">{v.label}</div>
+                  <div className="text-[10px] text-zinc-500 mt-0.5">{v.description}</div>
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-zinc-600">
+              First run downloads ~85 MB model from HuggingFace and caches it locally.
+            </p>
+          </div>
+        )}
+
+        {/* TTS Test */}
+        <div className="flex items-center gap-3 pt-1">
+          <button
+            onClick={handleTtsTest}
+            disabled={testState === "testing"}
+            className={cn(
+              "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-all",
+              testState === "testing"
+                ? "border-zinc-700 text-zinc-600 cursor-not-allowed"
+                : testState === "ok"
+                ? "border-emerald-700 text-emerald-400 hover:border-emerald-500"
+                : testState === "error"
+                ? "border-red-800 text-red-400 hover:border-red-600"
+                : "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200",
+            )}
+          >
+            {testState === "testing" ? (
+              <>
+                <span className="w-3 h-3 border border-zinc-600 border-t-zinc-300 rounded-full animate-spin inline-block" />
+                {ttsProvider === "kokoro" ? "Loading model…" : "Testing…"}
+              </>
+            ) : testState === "ok" ? (
+              "✓ Working — click to replay"
+            ) : (
+              "▶ Test Voice"
+            )}
+          </button>
+
+          {testState === "error" && testError && (
+            <p className="text-[11px] text-red-400 leading-tight flex-1 line-clamp-2">{testError}</p>
+          )}
+
+          {ttsProvider === "kokoro" && testState === "idle" && (
+            <p className="text-[10px] text-zinc-600">Requires HF_TOKEN in .env · ~30 s on first run</p>
+          )}
         </div>
 
         {error && <p className="text-xs text-red-400">{error}</p>}
@@ -334,7 +469,7 @@ interface SceneCardProps {
   scene: { scene_id: number; level_title?: string; narration_text?: string; camera_instruction?: string };
   sceneJob: SceneJob;
   onApprove: () => void;
-  onRedo: () => void;
+  onRedo: (promptOverride?: string) => void;
   redoing: boolean;
 }
 
@@ -343,6 +478,25 @@ function SceneCard({ job, scene, sceneJob, onApprove, onRedo, redoing }: SceneCa
   const isGenerating = sceneJob.status === "pending" || redoing;
   const approved = sceneJob.approved;
   const failed = sceneJob.status === "failed";
+
+  const [showEditor, setShowEditor] = useState(false);
+  const [editorPrompt, setEditorPrompt] = useState("");
+
+  function openEditor() {
+    // Strip the style prefix so the user only sees/edits the scene-specific part
+    const lastPrompt = sceneJob.image_prompt ?? "";
+    const stylePrefix = lastPrompt.indexOf(", 1 person, ");
+    const cleanPrompt = stylePrefix !== -1
+      ? lastPrompt.slice(stylePrefix + ", 1 person, ".length)
+      : lastPrompt;
+    setEditorPrompt(cleanPrompt);
+    setShowEditor(true);
+  }
+
+  function submitRedo() {
+    setShowEditor(false);
+    onRedo(editorPrompt.trim() || undefined);
+  }
 
   return (
     <div className={cn(
@@ -393,29 +547,60 @@ function SceneCard({ job, scene, sceneJob, onApprove, onRedo, redoing }: SceneCa
           </p>
         )}
 
+        {/* Prompt editor (shown after clicking Redo) */}
+        {showEditor && !redoing && (
+          <div className="flex flex-col gap-1.5 pt-1 border-t border-zinc-800">
+            <label className="text-[10px] text-zinc-400 font-medium">Edit image prompt</label>
+            <textarea
+              value={editorPrompt}
+              onChange={(e) => setEditorPrompt(e.target.value)}
+              rows={3}
+              className="w-full text-[11px] bg-zinc-900 border border-zinc-700 rounded-md px-2 py-1.5 text-zinc-200 resize-none focus:outline-none focus:border-zinc-500 placeholder:text-zinc-600"
+              placeholder="Describe the scene… (leave blank to re-run AI planner)"
+            />
+            <div className="flex gap-1.5">
+              <Button
+                onClick={submitRedo}
+                className="flex-1 text-xs py-1 h-auto bg-white text-black hover:bg-zinc-200 font-semibold"
+              >
+                Generate
+              </Button>
+              <Button
+                onClick={() => setShowEditor(false)}
+                variant="outline"
+                className="flex-1 text-xs py-1 h-auto border-zinc-700 text-zinc-400 hover:text-white"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Actions */}
-        <div className="flex gap-1.5 mt-auto pt-1">
-          <Button
-            onClick={onApprove}
-            disabled={!hasImage || approved || redoing}
-            className={cn(
-              "flex-1 text-xs py-1.5 h-auto font-semibold",
-              approved
-                ? "bg-emerald-800 text-emerald-200 cursor-default"
-                : "bg-white text-black hover:bg-zinc-200",
-            )}
-          >
-            {approved ? "Approved" : "✓ Approve"}
-          </Button>
-          <Button
-            onClick={onRedo}
-            disabled={redoing || !hasImage && !failed}
-            variant="outline"
-            className="flex-1 text-xs py-1.5 h-auto border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500"
-          >
-            {redoing ? "…" : "↺ Redo"}
-          </Button>
-        </div>
+        {!showEditor && (
+          <div className="flex gap-1.5 mt-auto pt-1">
+            <Button
+              onClick={onApprove}
+              disabled={!hasImage || approved || redoing}
+              className={cn(
+                "flex-1 text-xs py-1.5 h-auto font-semibold",
+                approved
+                  ? "bg-emerald-800 text-emerald-200 cursor-default"
+                  : "bg-white text-black hover:bg-zinc-200",
+              )}
+            >
+              {approved ? "Approved" : "✓ Approve"}
+            </Button>
+            <Button
+              onClick={openEditor}
+              disabled={redoing || (!hasImage && !failed)}
+              variant="outline"
+              className="flex-1 text-xs py-1.5 h-auto border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500"
+            >
+              {redoing ? "…" : "↺ Redo"}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -439,13 +624,13 @@ function ImageReviewPanel({ job, onApproveAll, approvingAll }:
     });
   }
 
-  async function redoScene(sceneId: number) {
+  async function redoScene(sceneId: number, promptOverride?: string) {
     setRedoingScenes((s) => new Set(s).add(sceneId));
     try {
       await fetch("/api/pipeline/redo-scene", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId: job.job_id, sceneId }),
+        body: JSON.stringify({ jobId: job.job_id, sceneId, promptOverride }),
       });
     } finally {
       setRedoingScenes((s) => { const n = new Set(s); n.delete(sceneId); return n; });
@@ -496,7 +681,7 @@ function ImageReviewPanel({ job, onApproveAll, approvingAll }:
                 scene={scene}
                 sceneJob={sceneJob}
                 onApprove={() => approveScene(scene.scene_id)}
-                onRedo={() => redoScene(scene.scene_id)}
+                onRedo={(prompt) => redoScene(scene.scene_id, prompt)}
                 redoing={redoingScenes.has(scene.scene_id)}
               />
             );
@@ -630,13 +815,13 @@ export default function App() {
   }, [activeJob?.job_id, activeJob?.status, stopPoll]);
 
   // ── Actions ──────────────────────────────────────────────────────────────────
-  async function handleStart(topic: string, targetDurationSeconds: number) {
+  async function handleStart(topic: string, targetDurationSeconds: number, ttsProvider: string, kokoroVoice: string) {
     setStarting(true);
     try {
       const res = await fetch("/api/pipeline/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic, targetDurationSeconds }),
+        body: JSON.stringify({ topic, targetDurationSeconds, ttsProvider, kokoroVoice }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to start");

@@ -7,5 +7,5 @@
     "noEmit": false,
     "outDir": ".pipeline-build"
   },
-  "include": ["pipeline/**/*.ts", "lib/**/*.ts"]
+  "include": ["pipeline/**/*.ts", "lib/**/*.ts", "types/**/*.d.ts"]
 }
