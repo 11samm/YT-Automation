@@ -5,7 +5,11 @@ import { z } from "zod";
 export const DOODLE_STYLE_SUFFIX =
   "2D flat cartoon animation, clean educational animation style, " +
   "every single character has a perfectly round plain white balloon head " +
-  "with two small black dot eyes and a simple curved line mouth, simple cartoon body shapes, " +
+  "with two small black dot eyes and a short straight horizontal black line mouth, " +
+  "completely neutral deadpan expression, no smile, no frown, no smirk, " +
+  "no blushing, no rosy or pink cheeks, no red marks on the face, " +
+  "the head is solid matte white with only the black eyes and black mouth line, " +
+  "simple cartoon body shapes, " +
   "bold black outlines, flat solid color fills, clean vector illustration, " +
   "simple solid-color backgrounds with minimal detail, muted neutral color palette, " +
   "soft ambient lighting only, no dramatic shadows, no noir lighting, " +

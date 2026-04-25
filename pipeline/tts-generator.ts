@@ -18,7 +18,7 @@ const OPENAI_TTS_MODEL = "tts-1";
 
 // Kokoro-82M defaults — voices: af_bella (American Female) | am_echo (American Male)
 const KOKORO_VOICE = process.env.KOKORO_VOICE ?? "af_bella";
-const KOKORO_MODEL = "onnx-community/Kokoro-82M-v1.0";
+const KOKORO_MODEL = "onnx-community/Kokoro-82M-v1.0-ONNX";
 
 // Module-level cache so the model loads only once per pipeline run
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
