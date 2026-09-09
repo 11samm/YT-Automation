@@ -1,139 +1,109 @@
-# 🎬 TutorFilm
+# YT-Automation
 
-**AI-directed educational mini-movies for the classroom.** Describe a lesson (or upload a PDF), pick how your teacher appears and sounds, then walk through a guided pipeline—script → thumbnails → scene videos → background score → final mix—until you can **preview and download** a single polished MP4.
+**Turn a topic into a narrated, illustrated video—with review at each creative stage.**
 
-## 🎥 Demo
+YT-Automation is a local video production pipeline with a Next.js dashboard and a command-line interface. It generates structured scripts, creates scene illustrations, synthesizes narration, and assembles the results into a downloadable MP4 using FFmpeg.
 
-[Watch Demo](https://www.youtube.com/watch?v=-ETTMszW7cs)
+## How it works
 
----
+1. **Choose a topic and duration** — describe the video you want to make.
+2. **Review the script** — inspect generated scenes and narration before moving ahead.
+3. **Refine the illustrations** — review scene images, edit prompts, and regenerate individual scenes.
+4. **Approve production** — continue once the scene assets are ready.
+5. **Render and download** — combine illustrated scenes, narration, transitions, and background audio into a final video.
 
-## ✨ What you get
+## Highlights
 
-| | |
-|:---|:---|
-| 📝 **Smart script** | Structured scenes with dialogue tuned to duration and reading level |
-| 🎭 **Cast & voice** | Animated teacher (male / female / custom selfie) or narrated B-roll; **voice picks match** default male vs female avatars |
-| 🖼️ **Keyframes** | Stylized thumbnails per scene for approval before animation |
-| 🎥 **Scene clips** | Per-scene video with consistent character reference where applicable |
-| 🎵 **Music bed** | Lyria-generated **instrumental** underscore, mixed under dialogue on export |
-| 📤 **Final export** | Server-side concat + FFmpeg mux → one downloadable lesson video |
+- **AI scripting and visual planning** powered by Google Gemini.
+- **Consistent illustration style** using Flux.1 Schnell through fal.ai.
+- **Narration options** for ElevenLabs, OpenAI TTS, or local Kokoro synthesis.
+- **Human review controls** for scripts and individual scene images, plus an automatic CLI mode.
+- **Local rendering** at 1920 × 1080 and 30 fps, with crossfade transitions and background audio mixing.
+- **Inspectable jobs and outputs** stored as local files, including per-job logs and generated media.
 
-The workspace is a **40/60 split**: **Director’s Desk** (left) for choices and approvals, **AI canvas** (right) for progress, script, and gallery.
+The current renderer turns static illustrations into narrated scene clips. YouTube uploading and scheduling are outside the implemented pipeline.
 
----
+## Built with
 
-## 🧭 User flow (high level)
+**Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · FFmpeg**
 
-1. **Landing** — Target age, lesson concept, optional PDF, duration  
-2. **Cast & voice** — Toggle animated teacher vs B-roll, choose avatar and voice → **Continue — write script**  
-3. **Waiting** — Script generates; progress on the right  
-4. **Approve script** — Edit scene order/dialogue if needed → confirm  
-5. **Thumbnails** — Approve or redo → confirm  
-6. **Animations** — Scene videos → confirm  
-7. **Assembly & music** — Clips stitched, score composed, **final mix** → download when ready  
+AI integrations use `@google/genai`, `@fal-ai/client`, and provider-specific speech APIs. Pipeline state is stored in local JSON job files.
 
----
+## Getting started
 
-## 🛠️ Tech stack
+### 1. Install dependencies
 
-- **Framework:** [Next.js](https://nextjs.org) 16 · [React](https://react.dev) 19 · TypeScript  
-- **UI:** Tailwind CSS v4 · [shadcn/ui](https://ui.shadcn.com) patterns · [Framer Motion](https://www.framer.com/motion/) · [Lucide](https://lucide.dev) icons  
-- **State:** [Zustand](https://zustand-demo.pmnd.rs/)  
-- **Backend & media:** [Supabase](https://supabase.com) (DB + storage) · server-side **FFmpeg** (`ffmpeg-static`) for stitch/mux  
-- **AI:** Google **Gemini** (script) · **Veo**-style video pipeline · **Lyria** (music via `@google/genai`) · thumbnail generation per `generate-thumbnail` route  
+Use Node.js compatible with Next.js 16 and npm:
 
----
-
-## 📁 Project layout (useful paths)
-
-```
-app/
-  api/          # generate-script, generate-thumbnail, generate-video,
-                # generate-music, stitch-scenes, stitch-video, …
-  page.tsx      # Shell: setup → workspace
-components/
-  tutor-film/   # LeftPane, RightPane, SetupScreen, …
-lib/
-  store.ts      # Zustand project + pipeline actions
-  voice-catalog.ts
-supabase/
-  migrations/   # SQL migrations
-```
-
-Deeper architecture notes live in [`PLANNING.md`](./PLANNING.md).
-
----
-
-## ⚙️ Setup
-
-### 1. Install
-
-```bash
+```sh
+git clone https://github.com/11samm/YT-Automation.git
+cd YT-Automation
 npm install
 ```
 
-### 2. Environment
+Install FFmpeg and FFprobe if they are not available on your system. The project includes `ffmpeg-static`; explicit binary paths are useful if its downloaded binary is unavailable or you want a particular system build.
 
-Copy the example file and fill in real values:
+### 2. Configure the environment
 
-```bash
-cp .env.example .env.local
+Copy [.env.example](.env.example) to **`.env`** in the project root. The CLI loads this file through `dotenv/config`, and Next.js also reads it.
+
+Set the following values:
+
+```dotenv
+GEMINI_API_KEY=your_gemini_api_key
+FAL_KEY=your_fal_ai_api_key
+TTS_PROVIDER=elevenlabs
+TTS_API_KEY=your_tts_api_key
+MUSIC_PROVIDER=ffmpeg
 ```
 
-| Variable | Purpose |
-|:---------|:--------|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Browser client |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server-only (storage / admin updates) |
-| `GEMINI_API_KEY` / `GOOGLE_API_KEY` | Script + compatible Google AI calls (see code paths) |
-| Thumbnail / video keys | As required by your `generate-thumbnail` & `generate-video` routes |
-| `NEXT_PUBLIC_DEFAULT_*_ANGLES_URL` | Default male/female **character angle** reference images |
-| `NEXT_PUBLIC_DEMO_VIDEO_URL` | Optional demo shortcut |
+- **Gemini and fal.ai:** use API credentials with access to the models referenced in `pipeline/`.
+- **ElevenLabs:** optionally set `ELEVENLABS_VOICE_ID` to your chosen voice.
+- **OpenAI speech:** set `TTS_PROVIDER=openai`, use the matching `TTS_API_KEY`, and optionally set `OPENAI_TTS_VOICE`.
+- **Local speech:** set `TTS_PROVIDER=kokoro`; optionally set `KOKORO_VOICE`. This mode downloads model assets on first use.
+- **Background audio:** `MUSIC_PROVIDER=ffmpeg` creates a local ambient track. A custom HTTP music service can be configured with `MUSIC_PROVIDER=api`, `MUSIC_API_URL`, and `MUSIC_API_KEY`.
+- **Media binaries:** set `FFMPEG_PATH` and `FFPROBE_PATH` to full executable paths when needed.
 
-> 🔒 Never commit `.env.local` or service role keys.
+Keep API credentials in your local environment files. Cloud generation uses your provider accounts and may incur usage charges.
 
-> Reccomended Male Template : https://png.pngtree.com/png-vector/20240628/ourmid/pngtree-friendly-israeli-man-good-looking-man-show-the-full-body-pixar-png-image_12751167.png
+### 3. Open the dashboard
 
-> Reccomended Female Template : https://i.ibb.co/rC7Wfwd/Gemini-Generated-Image-frvn0lfrvn0lfrvn.png
-
-### 3. Database
-
-Apply migrations in `supabase/migrations/` to your Supabase project (SQL editor or CLI), matching your deployment.
-
-### 4. Run locally
-
-```bash
+```sh
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [localhost:3000](http://localhost:3000), enter a topic, and follow the script and image approval steps.
 
-```bash
-npm run build   # production build
-npm start       # run production server
-npm run lint    # eslint
+### Command-line usage
+
+```sh
+# Interactive approvals
+npm run pipeline -- --topic "How a city gets its drinking water" --duration 5
+
+# Run without approval pauses
+npm run pipeline -- --topic "How a city gets its drinking water" --duration 5 --auto-approve
 ```
 
----
+`--duration` is measured in minutes and defaults to 10. The CLI also accepts `--job-id` for an existing job.
 
-## 📜 Scripts
+## Files and outputs
 
-| Command | Description |
-|:--------|:------------|
-| `npm run dev` | Next.js dev server |
-| `npm run build` | Production build |
-| `npm run start` | Start production server |
-| `npm run lint` | Lint the repo |
+```text
+app/api/pipeline/  # Start, status, approval, and scene-editing endpoints
+components/       # Dashboard and review interface
+pipeline/         # Script, image, speech, music, orchestration, and rendering
+lib/              # Schemas and media-binary resolution
+jobs/             # Per-job JSON state
+output/<job-id>/   # Generated assets, pipeline.log, and final.mp4
+```
 
----
+## Running in production
 
-## 🙏 Credits
+```sh
+npm run build
+npm start
+```
 
-UI bootstrapped with [v0](https://v0.app); evolved into the TutorFilm product flow above.
+Use a persistent Node.js environment with writable storage and permission to launch child processes. The dashboard starts a background pipeline process, and jobs and media depend on local disk. A static export or short-lived serverless function alone does not provide that runtime.
 
----
-
-<p align="center">
-  <b>Teach once. Film it beautifully. 🎓✨</b>
-</p>
+The renderer attempts NVIDIA NVENC encoding and includes a software fallback. Rendering speed and codec compatibility depend on the installed FFmpeg build. If narration generation fails, the orchestrator can substitute silence; check the job log and preview the final audio before publishing a video.
